@@ -39,9 +39,12 @@ function whoOwner {
     ls -o -d $1 | awk '{ print $3 }'
 }
 
-echo "Pfad: $1"
-exists $1
-fileOrDir $1
-isSymboliclink $1
-isOwner $1
-whoOwner $1
+for path in $@
+do
+echo "Pfad: $path"
+exists $path
+fileOrDir $path
+isSymboliclink $path
+isOwner $path
+whoOwner $path
+done 
