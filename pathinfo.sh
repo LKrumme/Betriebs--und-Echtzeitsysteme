@@ -26,7 +26,21 @@ function isSymboliclink {
     fi
 }
 
+function isOwner {
+    if [ -O $1 ]; then
+        echo "Der Aufrufer ist Besitzer der Datei"
+    else 
+        echo "Der Aufrufer ist nicht Besitzer der Datei"
+    fi
+}
+
+function whoOwner { 
+    echo -n "Der Besitzer der Datei oder des Ordners ist: "
+    ls -o $1 | awk '{ print $3 }'
+}
 
 exists $1
 fileOrDir $1
 isSymboliclink $1
+isOwner $1
+whoOwner $1
