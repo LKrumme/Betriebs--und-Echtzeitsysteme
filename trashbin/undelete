@@ -1,0 +1,20 @@
+#!/bin/bash
+
+function moveOutOfTrashbin {
+    mv $HOME/.trashbin/$1 $undeletePath
+}
+
+function eraseEntryTrashbinDir {
+    oldContent=$()
+    grep --invert-match $1 $HOME/.trashbin/.dir > $HOME/.trashbin/.tmp
+    mv $HOME/.trashbin/.tmp $HOME/.trashbin/.dir
+}
+
+undeletePath=$(cat $HOME/.trashbin/.dir | grep $1 | awk '{ print $2 }')
+
+if [ -d  ${undeletePath%/*} ]; then 
+    moveOutOfTrashbin $1
+    eraseEntryTrashbinDir $1
+else 
+    echo "Der urspüngliche Pfad der wiederherzustellenden Datei existiert nicht mehr!"
+fi

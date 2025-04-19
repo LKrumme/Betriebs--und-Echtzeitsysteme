@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 function exists {
     if [ -e $1 ]; then

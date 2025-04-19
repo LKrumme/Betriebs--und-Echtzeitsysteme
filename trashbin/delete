@@ -1,0 +1,29 @@
+#!/bin/bash
+
+function moveToTrashbin {
+    if [ ! -d $HOME/.trashbin ]; then
+        mkdir -p $HOME/.trashbin
+        echo "Papierkorb erstellt"
+    fi
+    mv $1 $HOME/.trashbin/$trashbinName
+}
+
+function writeTrashbinDir {
+    if [ ! -e $HOME/.trashbin/.dir ]; then
+        touch $HOME/.trashbin/.dir
+    fi
+    echo $trashbinName! $(pwd)/$1 >> $HOME/.trashbin/.dir
+}
+
+function printTrashbinName {
+    echo "Name der Datei im Papierkorb: "$trashbinName
+}
+
+if [ -e $1 ]; then
+    trashbinName=$(date '+%y%m%d%H%M%S')_$$.dat
+    moveToTrashbin $1
+    writeTrashbinDir $1
+    printTrashbinName $1
+else 
+    echo "$1: Datei oder Verzeichnis nicht gefunden!"
+fi
