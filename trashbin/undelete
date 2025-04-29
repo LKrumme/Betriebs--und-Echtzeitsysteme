@@ -1,19 +1,23 @@
 #!/bin/bash
 
+#Umkehrfunktion zu moveToTrashbin
 function moveOutOfTrashbin {
     mv $HOME/.trashbin/$1 $undeletePath
 }
 
+#Eintrag aus dem TrashbinDir löschen
 function eraseEntryTrashbinDir {
-    oldContent=$()
+    #Das hat mich bluten lassen. Man darf die Datei, die man gerade ließt nicht direkt schreiben.
+    #Deswegen wird erst in .tmp geschrieben und dann .tmp umbennannt. 
     grep --invert-match $1 $HOME/.trashbin/.dir > $HOME/.trashbin/.tmp
     mv $HOME/.trashbin/.tmp $HOME/.trashbin/.dir
 }
 
+#Der ursprüngliche Pfad der zu wiederherstellenden Datei
 undeletePath=$(cat $HOME/.trashbin/.dir | grep $1 | awk '{ print $2 }')
 
-if [ -d  ${undeletePath%/*} ]; then
-    if [ ! -z $undeletePath ]; then 
+if [ -d  ${undeletePath%/*} ]; then #${undeletePath%/*} gibt den Pfad bis zum letzten / an. Das sollte der Pfad sein, der vor dem Dateinamen kommt. Dann wird auf dessen Existenz geprüft. 
+    if [ ! -z $undeletePath ]; then #Falls $undeletePath leer sein sollte wird ein Fehler ausgegeben.  
         moveOutOfTrashbin $1
         eraseEntryTrashbinDir $1
     else 

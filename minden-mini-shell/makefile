@@ -1,2 +1,7 @@
+compiler=gcc
+output=-o minden-mini-shell.out
+optionen=-Wall -pedantic
+main=main.c
+
 all: 
-	gcc main.c 
+	${compiler} ${output} ${optionen} ${main} 

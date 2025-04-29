@@ -1,5 +1,6 @@
 #!/bin/bash
 
+#Papierkorbverzeichnis erstellen falls nicht vorhanden und Datei in den Papierkorb verschieben.
 function moveToTrashbin {
     if [ ! -d $HOME/.trashbin ]; then
         mkdir -p $HOME/.trashbin
@@ -8,6 +9,7 @@ function moveToTrashbin {
     mv $1 $HOME/.trashbin/$trashbinName
 }
 
+#Den neuen und Ursprünglichen Dateinamen in .dir schreiben
 function writeTrashbinDir {
     if [ ! -e $HOME/.trashbin/.dir ]; then
         touch $HOME/.trashbin/.dir
@@ -15,12 +17,14 @@ function writeTrashbinDir {
     echo $trashbinName! $(pwd)/$1 >> $HOME/.trashbin/.dir
 }
 
+#Den Namen Ausgeben
 function printTrashbinName {
     echo "Name der Datei im Papierkorb: "$trashbinName
 }
 
+#Überprüfen ob Datei existiert und funtkionen ausführen
 if [ -e $1 ]; then
-    trashbinName=$(date '+%y%m%d%H%M%S')_$$.dat
+    trashbinName=$(date '+%y%m%d%H%M%S')_$$.dat #trashbinName wird hier einmal festgelegt, damit sich die Zeit im Verlauf nicht ändert.
     moveToTrashbin $1
     writeTrashbinDir $1
     printTrashbinName $1
