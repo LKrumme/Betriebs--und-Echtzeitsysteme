@@ -12,9 +12,13 @@ function eraseEntryTrashbinDir {
 
 undeletePath=$(cat $HOME/.trashbin/.dir | grep $1 | awk '{ print $2 }')
 
-if [ -d  ${undeletePath%/*} ]; then 
-    moveOutOfTrashbin $1
-    eraseEntryTrashbinDir $1
+if [ -d  ${undeletePath%/*} ]; then
+    if [ ! -z $undeletePath ]; then 
+        moveOutOfTrashbin $1
+        eraseEntryTrashbinDir $1
+    else 
+        echo "Angegebene Datei wurde nicht im Papierkorb gefunden!"
+    fi
 else 
     echo "Der urspüngliche Pfad der wiederherzustellenden Datei existiert nicht mehr!"
 fi
