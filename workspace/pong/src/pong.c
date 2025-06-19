@@ -23,7 +23,7 @@
 #define YELLOW_BUTTON 20
 #define RED_BUTTON 21
 
-
+const int buttons[4] = {GREEN_BUTTON, BLUE_BUTTON, RED_BUTTON, YELLOW_BUTTON};
 
 //CONSTANTS
 #define STANDARD_WAIT_SEMAPHORE 2 //ms
@@ -103,53 +103,20 @@ int main( void )
 	// set led pin to high
 	REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << BLUE_LED);
 
-	// setup GREEN_BUTTON as input
-	// disable pin-specific functions
-	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << GREEN_BUTTON);
-	// enable pull-up resistor
-	REG(GPIO_BASE + GPIO_PUE) |= 1 << GREEN_BUTTON;
-	// enable input function of the pin
-	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << GREEN_BUTTON;
-	// disable output function of the pin
-	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << GREEN_BUTTON);
-	// set button pin to low
-	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << GREEN_BUTTON);
 
-	// setup BLUE_BUTTON as input
-	// disable pin-specific functions
-	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << BLUE_BUTTON);
-	// enable pull-up resistor
-	REG(GPIO_BASE + GPIO_PUE) |= 1 << BLUE_BUTTON;
-	// enable input function of the pin
-	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << BLUE_BUTTON;
-	// disable output function of the pin
-	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << BLUE_BUTTON);
-	// set button pin to low
-	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << BLUE_BUTTON);
-
-	// setup YELLOW_BUTTON as input
-	// disable pin-specific functions
-	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << YELLOW_BUTTON);
-	// enable pull-up resistor
-	REG(GPIO_BASE + GPIO_PUE) |= 1 << YELLOW_BUTTON;
-	// enable input function of the pin
-	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << YELLOW_BUTTON;
-	// disable output function of the pin
-	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << YELLOW_BUTTON);
-	// set button pin to low
-	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << YELLOW_BUTTON);
-
-	// setup RED_BUTTON as input
-	// disable pin-specific functions
-	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << RED_BUTTON);
-	// enable pull-up resistor
-	REG(GPIO_BASE + GPIO_PUE) |= 1 << RED_BUTTON;
-	// enable input function of the pin
-	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << RED_BUTTON;
-	// disable output function of the pin
-	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << RED_BUTTON);
-	// set button pin to low
-	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << RED_BUTTON);
+	for(int i=0; i<4; i++){
+		// setup BUTTON as input
+		// disable pin-specific functions
+		REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << buttons[i]);
+		// enable pull-up resistor
+		REG(GPIO_BASE + GPIO_PUE) |= 1 << buttons[i];
+		// enable input function of the pin
+		REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << buttons[i];
+		// disable output function of the pin
+		REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << buttons[i]);
+		// set button pin to low
+		REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << buttons[i]);
+	}
 
 	oled_init();
 
@@ -375,10 +342,9 @@ void score(void *pvParameters){
 void keyboard(void *pvParameters){
 	int current;
 
-	const int buttons[4] = {GREEN_BUTTON, BLUE_BUTTON, RED_BUTTON, YELLOW_BUTTON};
 	int button_last_states[4] = {0,0,0,0};
 	int button_last_pressed[4] = {0,0,0,0};
-	int button_count[4];
+	int button_count[4] = {0,0,0,0};
 
 	for(;;){
 		for(int i=0; i<4; i++){
