@@ -343,7 +343,7 @@ void score(void *pvParameters){
 		}
 		//RESTART
 		if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
-			//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können?
+			//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können? ja
 			//BALL
 			fVelocityX = 1; //Später random wählen
 			fVelocityY = 1;
