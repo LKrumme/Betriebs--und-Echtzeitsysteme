@@ -11,12 +11,7 @@
 #define REG(P) (*(volatile uint32_t *) (P))
 
 #define GPIO_BASE 0x10012000
-#define GPIO_INPUT_EN 0x4
-#define GPIO_INPUT_VAL 0x0
 #define GPIO_PUE 0x10
-#define GPIO_OUTPUT_EN 0x8
-#define GPIO_OUTPUT_VAL 0xc
-#define GPIO_IOF_EN 0x38
 
 #define PLIC_BASE 0x0C000000
 #define PLIC_ENABLE 0x2000
@@ -35,6 +30,7 @@
 #define UPDATE_RATE_BALL 20 //ms
 #define UPDATE_RATE_PLAYER 5 //ms
 #define PLAYER_STEP 1
+#define DEBOUNCE_THRESHOLD 10 
 
 //Structs
 struct key_pres
@@ -267,16 +263,16 @@ void player_logic(void *pvParameters){
 				//Button handeln
 				switch (key_press_player.button_num)
 				{
-				case 2:
+				case GREEN_BUTTON:
 					green_pressed = key_press_player.button_pressed;
 					break;
-				case 3: 
+				case BLUE_BUTTON: 
 					blue_pressed = key_press_player.button_pressed;
 					break;
-				case 4:
+				case YELLOW_BUTTON:
 					yellow_pressed = key_press_player.button_pressed;
 					break;
-				case 5:
+				case RED_BUTTON:
 					red_pressed = key_press_player.button_pressed;
 					break;
 				default:
@@ -349,28 +345,20 @@ void score(void *pvParameters){
 		if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
 			//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können?
 			//BALL
-			float fVelocityX = 1; //Später random wählen
-			float fVelocityY = 1;
-			float fPositionX = 7;
-			float fPositionY = DISP_H/2;
+			fVelocityX = 1; //Später random wählen
+			fVelocityY = 1;
+			fPositionX = 7;
+			fPositionY = DISP_H/2;
 
 			//PLAYERS
 
 			//Links ist Spieler 1
-			const int player1 = 1;
-			const int fPositionPlayer1X = 5;
-			const int fWidthPlayer1X= 1;
-			float fPositionPlayer1Y = DISP_H/2;
-			const float fWidthPlayer1Y = 5;
-			int iScorePlayer1 = 0;
+			fPositionPlayer1Y = DISP_H/2;
+			iScorePlayer1 = 0;
 
 			//Rechts ist Spieler 2
-			const int player2 = 2;
-			const int fPositionPlayer2X = DISP_W-5;
-			const int fWidthPlayer2X = 1;
-			float fPositionPlayer2Y = DISP_H/2;
-			const float fWidthPlayer2Y = 5;
-			int iScorePlayer2 = 0;
+			fPositionPlayer2Y = DISP_H/2;
+			iScorePlayer2 = 0;
 		}
 		//Tell draw_screen Task to do its Job
 		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
@@ -385,6 +373,40 @@ void score(void *pvParameters){
 
 
 void keyboard(void *pvParameters){
-	int green_button_pressed;
-	int green_button_realeased;
+	int current;
+
+	const int buttons[4] = {GREEN_BUTTON, BLUE_BUTTON, RED_BUTTON, YELLOW_BUTTON};
+	int button_last_states[4] = {0,0,0,0};
+	int button_last_pressed[4] = {0,0,0,0};
+	int button_count[4];
+
+	for(;;){
+		for(int i=0; i<4; i++){
+			current = REG(GPIO_BASE + GPIO_INPUT_VAL) & (1 << buttons[i]);
+			if(current && button_last_states[i]){
+				button_count[i]++;
+			}
+			else if (!current && !button_last_states[i]){
+				button_count[i]++;
+			}
+			else{
+				button_count[i] = 0;
+			}
+
+			if(button_count[i]>DEBOUNCE_THRESHOLD && button_last_pressed[i]!=current){ //Debounce check und check ob der Button state sich zum letzten Event geändert hat
+				button_last_pressed[i]=current;
+				key_press_keyboard.button_num = buttons[i];
+				key_press_keyboard.button_pressed = current;
+				if(xSemaphoreTake(xKey_Queue_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+					xQueueSend(xKey_Queue, &key_press_keyboard, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
+					xSemaphoreGive(xKey_Queue_Mutex);
+				}
+			}
+			button_last_states[i] = current;
+		}
+
+		key_press_keyboard.button_num=0;
+		key_press_keyboard.button_pressed=0;
+		vTaskDelay(pdMS_TO_TICKS(UPDATE_RATE_PLAYER/2));
+	}
 }
