@@ -11,9 +11,17 @@
 #define REG(P) (*(volatile uint32_t *) (P))
 
 #define GPIO_BASE 0x10012000
+#define GPIO_INPUT_EN 0x4
+#define GPIO_OUTPUT_EN 0x8
+#define GPIO_OUTPUT_VAL 0xc
+#define GPIO_IOF_EN 0x38
 
 #define PLIC_BASE 0x0C000000
 #define PLIC_ENABLE 0x2000
+
+//PINS
+#define BLUE_LED 5
+
 
 //CONSTANTS
 #define STANDARD_WAIT_SEMAPHORE 2 //ms
@@ -79,6 +87,18 @@ int main( void )
 	// deactivate PLIC
     REG(PLIC_BASE + PLIC_ENABLE) = 0;
     REG(PLIC_BASE + PLIC_ENABLE + 4) = 0;
+
+	//Init LED
+	// setup LED as output
+	// disable pin-specific functions
+	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << BLUE_LED);
+	// disable input function of the pin
+	REG(GPIO_BASE + GPIO_INPUT_EN) &= ~(1 << BLUE_LED);
+	// enable output function of the pin
+	REG(GPIO_BASE + GPIO_OUTPUT_EN) |= 1 << BLUE_LED;
+	// set led pin to high
+	REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << BLUE_LED);
+
 	oled_init();
 
 	//TODO Tasks initialisieren
@@ -91,8 +111,19 @@ int main( void )
 	xKey_Queue_Mutex = xSemaphoreCreateMutex();
 	
 	if(xDraw_screen == NULL || xScore_Update == NULL || xScore_Update_Mutex == NULL || xKey_Queue == NULL || xKey_Queue_Mutex == NULL){ //Kritischer Fehler. Programm kann ohne nicht laufen
-		setEntireDisplayOn(1);
-		//TODO LED auf dem Board blinken lassen, anstatt Display anmachen
+		//led blinken lassen
+		volatile uint32_t i = 0;
+		while(1){
+			// set led pin to low
+			REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << BLUE_LED);
+			// wait..
+			for (i = 0; i < 100000; i++){}
+
+			// set led pin to high
+			REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << BLUE_LED);
+			// wait..
+			for (i = 0; i < 100000; i++){}
+		}
 	}
 	else{
 		vTaskStartScheduler();
