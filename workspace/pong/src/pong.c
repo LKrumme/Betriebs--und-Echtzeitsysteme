@@ -12,6 +12,8 @@
 
 #define GPIO_BASE 0x10012000
 #define GPIO_INPUT_EN 0x4
+#define GPIO_INPUT_VAL 0x0
+#define GPIO_PUE 0x10
 #define GPIO_OUTPUT_EN 0x8
 #define GPIO_OUTPUT_VAL 0xc
 #define GPIO_IOF_EN 0x38
@@ -21,6 +23,11 @@
 
 //PINS
 #define BLUE_LED 5
+#define GREEN_BUTTON 18
+#define BLUE_BUTTON 19
+#define YELLOW_BUTTON 20
+#define RED_BUTTON 21
+
 
 
 //CONSTANTS
@@ -40,6 +47,7 @@ struct key_pres
 void ball_logic(void *pvParameters);
 void player_logic(void *pvParameters);
 void score(void *pvParameters);
+void keyboard(void *pvParameters);
 
 //Variables
 
@@ -98,6 +106,54 @@ int main( void )
 	REG(GPIO_BASE + GPIO_OUTPUT_EN) |= 1 << BLUE_LED;
 	// set led pin to high
 	REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << BLUE_LED);
+
+	// setup GREEN_BUTTON as input
+	// disable pin-specific functions
+	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << GREEN_BUTTON);
+	// enable pull-up resistor
+	REG(GPIO_BASE + GPIO_PUE) |= 1 << GREEN_BUTTON;
+	// enable input function of the pin
+	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << GREEN_BUTTON;
+	// disable output function of the pin
+	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << GREEN_BUTTON);
+	// set button pin to low
+	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << GREEN_BUTTON);
+
+	// setup BLUE_BUTTON as input
+	// disable pin-specific functions
+	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << BLUE_BUTTON);
+	// enable pull-up resistor
+	REG(GPIO_BASE + GPIO_PUE) |= 1 << BLUE_BUTTON;
+	// enable input function of the pin
+	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << BLUE_BUTTON;
+	// disable output function of the pin
+	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << BLUE_BUTTON);
+	// set button pin to low
+	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << BLUE_BUTTON);
+
+	// setup YELLOW_BUTTON as input
+	// disable pin-specific functions
+	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << YELLOW_BUTTON);
+	// enable pull-up resistor
+	REG(GPIO_BASE + GPIO_PUE) |= 1 << YELLOW_BUTTON;
+	// enable input function of the pin
+	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << YELLOW_BUTTON;
+	// disable output function of the pin
+	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << YELLOW_BUTTON);
+	// set button pin to low
+	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << YELLOW_BUTTON);
+
+	// setup RED_BUTTON as input
+	// disable pin-specific functions
+	REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << RED_BUTTON);
+	// enable pull-up resistor
+	REG(GPIO_BASE + GPIO_PUE) |= 1 << RED_BUTTON;
+	// enable input function of the pin
+	REG(GPIO_BASE + GPIO_INPUT_EN) |= 1 << RED_BUTTON;
+	// disable output function of the pin
+	REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << RED_BUTTON);
+	// set button pin to low
+	REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << RED_BUTTON);
 
 	oled_init();
 
@@ -274,53 +330,61 @@ void score(void *pvParameters){
 	//Update Score
 	//Restart game if one of the Players has Score 3 
 	int player_to_increase;
-	if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-		if(xQueueReceive(xScore_Update,&player_to_increase, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-			xSemaphoreGive(xScore_Update_Mutex);
-			if(player_to_increase==player1){
-				iScorePlayer1++;
+	for(;;){
+		if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			if(xQueueReceive(xScore_Update,&player_to_increase, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+				xSemaphoreGive(xScore_Update_Mutex);
+				if(player_to_increase==player1){
+					iScorePlayer1++;
+				}
+				else if(player_to_increase==player2){
+					iScorePlayer2++;
+				}
 			}
-			else if(player_to_increase==player2){
-				iScorePlayer2++;
+			else{
+				xSemaphoreGive(xScore_Update_Mutex);
 			}
 		}
-		else{
-			xSemaphoreGive(xScore_Update_Mutex);
+		//RESTART
+		if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
+			//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können?
+			//BALL
+			float fVelocityX = 1; //Später random wählen
+			float fVelocityY = 1;
+			float fPositionX = 7;
+			float fPositionY = DISP_H/2;
+
+			//PLAYERS
+
+			//Links ist Spieler 1
+			const int player1 = 1;
+			const int fPositionPlayer1X = 5;
+			const int fWidthPlayer1X= 1;
+			float fPositionPlayer1Y = DISP_H/2;
+			const float fWidthPlayer1Y = 5;
+			int iScorePlayer1 = 0;
+
+			//Rechts ist Spieler 2
+			const int player2 = 2;
+			const int fPositionPlayer2X = DISP_W-5;
+			const int fWidthPlayer2X = 1;
+			float fPositionPlayer2Y = DISP_H/2;
+			const float fWidthPlayer2Y = 5;
+			int iScorePlayer2 = 0;
 		}
+		//Tell draw_screen Task to do its Job
+		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
+			//Ressource genommen -> draw_screen kann Ressource jetzt freigeben
+		} 
+		else {
+			//Ressource konnte nicht genommen werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
+		}
+		vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_BALL ) );
 	}
-	//RESTART
-	if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
-		//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können?
-		//BALL
-		float fVelocityX = 1; //Später random wählen
-		float fVelocityY = 1;
-		float fPositionX = 7;
-		float fPositionY = DISP_H/2;
+}
 
-		//PLAYERS
 
-		//Links ist Spieler 1
-		const int player1 = 1;
-		const int fPositionPlayer1X = 5;
-		const int fWidthPlayer1X= 1;
-		float fPositionPlayer1Y = DISP_H/2;
-		const float fWidthPlayer1Y = 5;
-		int iScorePlayer1 = 0;
-
-		//Rechts ist Spieler 2
-		const int player2 = 2;
-		const int fPositionPlayer2X = DISP_W-5;
-		const int fWidthPlayer2X = 1;
-		float fPositionPlayer2Y = DISP_H/2;
-		const float fWidthPlayer2Y = 5;
-		int iScorePlayer2 = 0;
-	}
-	//Tell draw_screen Task to do its Job
-	if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
-		//Ressource genommen -> draw_screen kann Ressource jetzt freigeben
-	} 
-	else {
-		//Ressource konnte nicht genommen werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
-	}
-	vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_BALL ) );
+void keyboard(void *pvParameters){
+	int green_button_pressed;
+	int green_button_realeased;
 }
