@@ -31,33 +31,36 @@ struct key_pres
 //Tasks
 void ball_logic(void *pvParameters);
 void player_logic(void *pvParameters);
+void score(void *pvParameters);
 
 //Variables
 
 //BALL
-float fVelocityX;
-float fVelocityY;
-float fPositionX;
-float fPositionY;
+float fVelocityX = 1; //Später random wählen
+float fVelocityY = 1;
+float fPositionX = 7;
+float fPositionY = DISP_H/2;
 
 //PLAYERS
 
 //Links ist Spieler 1
 const int player1 = 1;
-const int fPositionPlayer1X;
-const int fWidthPlayer1X;
-float fPositionPlayer1Y;
-const float fWidthPlayer1Y;
+const int fPositionPlayer1X = 5;
+const int fWidthPlayer1X= 1;
+float fPositionPlayer1Y = DISP_H/2;
+const float fWidthPlayer1Y = 5;
+int iScorePlayer1 = 0;
 
 //Rechts ist Spieler 2
 const int player2 = 2;
-const int fPositionPlayer2X;
-const int fWidthPlayer2X;
-float fPositionPlayer2Y;
-const float fWidthPlayer2Y;
+const int fPositionPlayer2X = DISP_W-5;
+const int fWidthPlayer2X = 1;
+float fPositionPlayer2Y = DISP_H/2;
+const float fWidthPlayer2Y = 5;
+int iScorePlayer2 = 0;
 
 //INTERPROCESS COMMUNICATION
-//WARNING: EVERY ACTION WITH THESE NEEDS TO BE SECURED
+//EVERY ACTION WITH THESE NEEDS TO BE SECURED
 SemaphoreHandle_t xDraw_screen;
 SemaphoreHandle_t xScore_Update_Mutex;
 QueueHandle_t xScore_Update;
@@ -78,6 +81,8 @@ int main( void )
     REG(PLIC_BASE + PLIC_ENABLE + 4) = 0;
 	oled_init();
 
+	//TODO Tasks initialisieren
+
 	//Setup Semaphores etc.
 	xDraw_screen = xSemaphoreCreateBinary();
 	xScore_Update = xQueueCreate(2, sizeof(int)); //Könnte Speicheroptimierung vertragen, da man für Zwei Spieler nur einen Byte braucht, aber er hat mich nicht machen lassen
@@ -87,11 +92,11 @@ int main( void )
 	
 	if(xDraw_screen == NULL || xScore_Update == NULL || xScore_Update_Mutex == NULL || xKey_Queue == NULL || xKey_Queue_Mutex == NULL){ //Kritischer Fehler. Programm kann ohne nicht laufen
 		setEntireDisplayOn(1);
+		//TODO LED auf dem Board blinken lassen, anstatt Display anmachen
 	}
-
-	//TODO Tasks initialisieren
-
-	vTaskStartScheduler();
+	else{
+		vTaskStartScheduler();
+	}
 
 	// dummy loop
 	for (;;) {
@@ -155,7 +160,7 @@ void ball_logic(void *pvParameters){
 			//Ressource genommen -> draw_screen kann Ressource jetzt freigeben
 		} 
 		else {
-			//Ressource konnte nicht genommen werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
+			//Ressource konnte nicht enommeng werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
 		}
 		vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_BALL ) );
 	}	
@@ -232,4 +237,59 @@ void player_logic(void *pvParameters){
 		vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_PLAYER ) );
 	}
 
+}
+
+void score(void *pvParameters){
+	//Update Score
+	//Restart game if one of the Players has Score 3 
+	int player_to_increase;
+	if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+		if(xQueueReceive(xScore_Update,&player_to_increase, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			xSemaphoreGive(xScore_Update_Mutex);
+			if(player_to_increase==player1){
+				iScorePlayer1++;
+			}
+			else if(player_to_increase==player2){
+				iScorePlayer2++;
+			}
+		}
+		else{
+			xSemaphoreGive(xScore_Update_Mutex);
+		}
+	}
+	//RESTART
+	if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
+		//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können?
+		//BALL
+		float fVelocityX = 1; //Später random wählen
+		float fVelocityY = 1;
+		float fPositionX = 7;
+		float fPositionY = DISP_H/2;
+
+		//PLAYERS
+
+		//Links ist Spieler 1
+		const int player1 = 1;
+		const int fPositionPlayer1X = 5;
+		const int fWidthPlayer1X= 1;
+		float fPositionPlayer1Y = DISP_H/2;
+		const float fWidthPlayer1Y = 5;
+		int iScorePlayer1 = 0;
+
+		//Rechts ist Spieler 2
+		const int player2 = 2;
+		const int fPositionPlayer2X = DISP_W-5;
+		const int fWidthPlayer2X = 1;
+		float fPositionPlayer2Y = DISP_H/2;
+		const float fWidthPlayer2Y = 5;
+		int iScorePlayer2 = 0;
+	}
+	//Tell draw_screen Task to do its Job
+	if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
+		//Ressource genommen -> draw_screen kann Ressource jetzt freigeben
+	} 
+	else {
+		//Ressource konnte nicht genommen werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
+	}
+	vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_BALL ) );
 }
