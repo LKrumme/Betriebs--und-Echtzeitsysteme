@@ -341,14 +341,16 @@ void score(void *pvParameters){
 
 void keyboard(void *pvParameters){
 	int current;
-
+	//Arrays um buttons zu überwachen
 	int button_last_states[4] = {0,0,0,0};
 	int button_last_pressed[4] = {0,0,0,0};
 	int button_count[4] = {0,0,0,0};
 
 	for(;;){
+		//Einmal durch jeden Knopf gehen
 		for(int i=0; i<4; i++){
-			current = REG(GPIO_BASE + GPIO_INPUT_VAL) & (1 << buttons[i]);
+			current = REG(GPIO_BASE + GPIO_INPUT_VAL) & (1 << buttons[i]);//button lesen
+			//Hochzählen für das debouncen
 			if(current && button_last_states[i]){
 				button_count[i]++;
 			}
@@ -360,9 +362,14 @@ void keyboard(void *pvParameters){
 			}
 
 			if(button_count[i]>DEBOUNCE_THRESHOLD && button_last_pressed[i]!=current){ //Debounce check und check ob der Button state sich zum letzten Event geändert hat
+
 				button_last_pressed[i]=current;
+				
+				//Struct fürs Abschicken beschreieben
 				key_press_keyboard.button_num = buttons[i];
 				key_press_keyboard.button_pressed = current;
+
+				//Mutex anfragen und Queue bestücken
 				if(xSemaphoreTake(xKey_Queue_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
 					xQueueSend(xKey_Queue, &key_press_keyboard, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
 					xSemaphoreGive(xKey_Queue_Mutex);
@@ -373,6 +380,7 @@ void keyboard(void *pvParameters){
 
 		key_press_keyboard.button_num=0;
 		key_press_keyboard.button_pressed=0;
-		vTaskDelay(pdMS_TO_TICKS(UPDATE_RATE_PLAYER/2));
+		//Doppelt so schnell wie die Spieleraktualisierung, damit beide Spieler Ihre knöpfe drücken können ohne, dass die Queue voll läuft.
+		vTaskDelay(pdMS_TO_TICKS(UPDATE_RATE_PLAYER/2)); 
 	}
 }
