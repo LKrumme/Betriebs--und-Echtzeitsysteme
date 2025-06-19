@@ -29,6 +29,7 @@ const int buttons[4] = {GREEN_BUTTON, BLUE_BUTTON, RED_BUTTON, YELLOW_BUTTON};
 #define STANDARD_WAIT_SEMAPHORE 2 //ms
 #define UPDATE_RATE_BALL 20 //ms
 #define UPDATE_RATE_PLAYER 5 //ms
+#define GAME_REFRESHRATE 60 //hz
 #define PLAYER_STEP 1
 #define DEBOUNCE_THRESHOLD 10 
 
@@ -44,6 +45,7 @@ void ball_logic(void *pvParameters);
 void player_logic(void *pvParameters);
 void score(void *pvParameters);
 void keyboard(void *pvParameters);
+void display(void *pvParameters);
 
 //Variables
 
@@ -119,6 +121,9 @@ int main( void )
 	}
 
 	oled_init();
+
+	fb_init();
+
 
 	//TODO Tasks initialisieren
 
@@ -382,5 +387,19 @@ void keyboard(void *pvParameters){
 		key_press_keyboard.button_pressed=0;
 		//Doppelt so schnell wie die Spieleraktualisierung, damit beide Spieler Ihre knöpfe drücken können ohne, dass die Queue voll läuft.
 		vTaskDelay(pdMS_TO_TICKS(UPDATE_RATE_PLAYER/2)); 
+	}
+}
+
+void display(void *pvParameters){
+
+	for(;;){
+		//Score mit printChar() malen
+		//Ball und Spieler mit fb_set_pixel() malen
+		//TODO Score, Ball und Spielerposition mit MUTEX absichern
+		
+		//Hier display malen
+
+		fb_flush();
+		vTaskDelay(pdMS_TO_TICKS(1/GAME_REFRESHRATE));
 	}
 }
