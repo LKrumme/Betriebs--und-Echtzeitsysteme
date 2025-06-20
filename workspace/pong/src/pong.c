@@ -27,9 +27,10 @@ const int buttons[4] = {GREEN_BUTTON, BLUE_BUTTON, RED_BUTTON, YELLOW_BUTTON};
 
 //CONSTANTS
 #define STANDARD_WAIT_SEMAPHORE 2 //ms
+#define LONG_WAIT_SEMAPHORE 50 //ms
 #define UPDATE_RATE_BALL 20 //ms
 #define UPDATE_RATE_PLAYER 5 //ms
-#define GAME_REFRESHRATE 60 //hz
+#define GAME_REFRESHRATE 30 //hz
 #define PLAYER_STEP 1
 #define DEBOUNCE_THRESHOLD 10 
 
@@ -123,9 +124,10 @@ int main( void )
 		REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << buttons[i]);
 	}
 
+	//Bildschirm Setup
 	oled_init();
-
 	fb_init();
+	setCursor(DISP_H, (DISP_W/2)-17);
 
 
 	//TODO Tasks initialisieren
@@ -338,11 +340,11 @@ void score(void *pvParameters){
 			}
 		}
 		//RESTART
-		if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(50))==pdTRUE){
+		if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
 			if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
 				xSemaphoreGive(xScore_Mutex);
 				//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können? ja
-				if(xSemaphoreTake(xBall_Mutex,pdMS_TO_TICKS(50))==pdTRUE){
+				if(xSemaphoreTake(xBall_Mutex,pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
 					//BALL
 					fVelocityX = 1; //Später random wählen
 					fVelocityY = 1;
@@ -350,7 +352,7 @@ void score(void *pvParameters){
 					fPositionY = DISP_H/2;
 					xSemaphoreGive(xBall_Mutex);
 				}
-				if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(50))==pdTRUE){
+				if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
 					//PLAYERS
 
 					//Links ist Spieler 1
@@ -360,7 +362,7 @@ void score(void *pvParameters){
 					xSemaphoreGive(xPlayer_Mutex);
 				}
 
-				if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(50))==pdTRUE){
+				if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
 					iScorePlayer1 = 0;				
 					iScorePlayer2 = 0;
 					xSemaphoreGive(xScore_Mutex);
@@ -430,10 +432,35 @@ void display(void *pvParameters){
 	for(;;){
 		//Score mit printChar() malen
 		//Ball und Spieler mit fb_set_pixel() malen
-		//TODO Score, Ball und Spielerposition mit MUTEX absichern
-		
-		//Hier display malen
+		//Reihenfolge um keinen Deadlock auszulösen (hoffentlich): BALL, PLAYER, SCORE
 
+		if(xSemaphoreTake(xBall_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			fb_set_pixel(fPositionX, fPositionY, 1);
+			xSemaphoreGive(xBall_Mutex);
+		}
+
+		if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			//START ecke oben Links vom Spieler. X
+			for(int x=fPositionPlayer1X-fWidthPlayer1X; x<=fPositionPlayer1X+fWidthPlayer1X; x++){
+				for(int y=fPositionPlayer1Y+fWidthPlayer1Y; y<=fPositionPlayer1Y-fWidthPlayer1Y; y++){
+					fb_set_pixel(x, y, 1);
+				}
+			}
+			for(int x=fPositionPlayer2X-fWidthPlayer2X; x<=fPositionPlayer2X+fWidthPlayer2X; x++){
+				for(int y=fPositionPlayer2Y+fWidthPlayer2Y; y<=fPositionPlayer2Y-fWidthPlayer2Y; y++){
+					fb_set_pixel(x, y, 1);
+				}
+			}
+			xSemaphoreGive(xPlayer_Mutex);
+		}
+
+		if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			printChar((char)iScorePlayer1);
+			printChar(':');
+			printChar((char)iScorePlayer2);
+			xSemaphoreGive(xScore_Mutex);
+		}
+		
 		fb_flush();
 		vTaskDelay(pdMS_TO_TICKS(1/GAME_REFRESHRATE));
 	}
