@@ -130,7 +130,12 @@ int main( void )
 	setCursor(DISP_H, (DISP_W/2)-17);
 
 
-	//TODO Tasks initialisieren
+	xTaskCreate(ball_logic, "Ball logik", 128, NULL,tskIDLE_PRIORITY+2UL, NULL);
+	xTaskCreate(player_logic, "Spieler logik", 128, NULL,tskIDLE_PRIORITY+2UL, NULL);
+	xTaskCreate(score, "Punkte und Spiel reset", 128, NULL, tskIDLE_PRIORITY+2UL, NULL);
+	xTaskCreate(keyboard, "Eingabe", 128, NULL, tskIDLE_PRIORITY+2UL, NULL);
+	xTaskCreate(display, "Bildschirm", 128, NULL, tskIDLE_PRIORITY+1UL, NULL); 	
+
 
 	//Setup Semaphores etc.
 	xDraw_screen = xSemaphoreCreateBinary();
@@ -226,16 +231,8 @@ void ball_logic(void *pvParameters){
 			xSemaphoreGive(xBall_Mutex);
 		}
 		
-		
-
-
 		//Tell draw_screen Task to do its Job
-		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
-			//Ressource genommen -> draw_screen kann Ressource jetzt freigeben
-		} 
-		else {
-			//Ressource konnte nicht enommeng werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
-		}
+		xSemaphoreGive(xDraw_screen);
 		vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_BALL ) );
 	}	
 }
@@ -303,15 +300,8 @@ void player_logic(void *pvParameters){
 			xSemaphoreGive(xPlayer_Mutex);
 		}
 
-		
-
 		//Tell draw_screen Task to do its Job
-		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
-			//Ressource genommen -> draw_screen kann Ressource jetzt freigeben
-		} 
-		else {
-			//Ressource konnte nicht genommen werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
-		}
+		xSemaphoreGive(xDraw_screen);
 		vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_PLAYER ) );
 	}
 
@@ -370,12 +360,7 @@ void score(void *pvParameters){
 			}
 		}
 		//Tell draw_screen Task to do its Job
-		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
-			//Ressource genommen -> draw_screen kann Ressource jetzt freigeben
-		} 
-		else {
-			//Ressource konnte nicht genommen werden. Fehler, aber nicht schlimm, wenn der Bildschirm nicht aktualisiert wurde.
-		}
+		xSemaphoreGive(xDraw_screen);
 		vTaskDelay( pdMS_TO_TICKS( UPDATE_RATE_BALL ) );
 	}
 }
@@ -430,38 +415,39 @@ void keyboard(void *pvParameters){
 void display(void *pvParameters){
 
 	for(;;){
-		//Score mit printChar() malen
-		//Ball und Spieler mit fb_set_pixel() malen
-		//Reihenfolge um keinen Deadlock auszulösen (hoffentlich): BALL, PLAYER, SCORE
-
-		if(xSemaphoreTake(xBall_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-			fb_set_pixel(fPositionX, fPositionY, 1);
-			xSemaphoreGive(xBall_Mutex);
-		}
-
-		if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-			//START ecke oben Links vom Spieler. X
-			for(int x=fPositionPlayer1X-fWidthPlayer1X; x<=fPositionPlayer1X+fWidthPlayer1X; x++){
-				for(int y=fPositionPlayer1Y+fWidthPlayer1Y; y<=fPositionPlayer1Y-fWidthPlayer1Y; y++){
-					fb_set_pixel(x, y, 1);
-				}
+		//malen
+		if(xSemaphoreTake(xDraw_screen, portMAX_DELAY)==pdTRUE){//Warten bis Ressource freigegeben wird
+			if(xSemaphoreTake(xBall_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+				fb_set_pixel(fPositionX, fPositionY, 1);
+				xSemaphoreGive(xBall_Mutex);
 			}
-			for(int x=fPositionPlayer2X-fWidthPlayer2X; x<=fPositionPlayer2X+fWidthPlayer2X; x++){
-				for(int y=fPositionPlayer2Y+fWidthPlayer2Y; y<=fPositionPlayer2Y-fWidthPlayer2Y; y++){
-					fb_set_pixel(x, y, 1);
-				}
-			}
-			xSemaphoreGive(xPlayer_Mutex);
-		}
 
-		if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-			printChar((char)iScorePlayer1);
-			printChar(':');
-			printChar((char)iScorePlayer2);
-			xSemaphoreGive(xScore_Mutex);
-		}
+			if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+				//START ecke oben Links vom Spieler. X
+				for(int x=fPositionPlayer1X-fWidthPlayer1X; x<=fPositionPlayer1X+fWidthPlayer1X; x++){
+					for(int y=fPositionPlayer1Y+fWidthPlayer1Y; y<=fPositionPlayer1Y-fWidthPlayer1Y; y++){
+						fb_set_pixel(x, y, 1);
+					}
+				}
+				for(int x=fPositionPlayer2X-fWidthPlayer2X; x<=fPositionPlayer2X+fWidthPlayer2X; x++){
+					for(int y=fPositionPlayer2Y+fWidthPlayer2Y; y<=fPositionPlayer2Y-fWidthPlayer2Y; y++){
+						fb_set_pixel(x, y, 1);
+					}
+				}
+				xSemaphoreGive(xPlayer_Mutex);
+			}
+
+			if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+				printChar((char)iScorePlayer1);
+				printChar(':');
+				printChar((char)iScorePlayer2);
+				xSemaphoreGive(xScore_Mutex);
+			}
+			
+			fb_flush();
+		} 
+
 		
-		fb_flush();
 		vTaskDelay(pdMS_TO_TICKS(1/GAME_REFRESHRATE));
 	}
 }
