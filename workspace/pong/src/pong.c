@@ -80,6 +80,9 @@ SemaphoreHandle_t xScore_Update_Mutex;
 QueueHandle_t xScore_Update;
 SemaphoreHandle_t xKey_Queue_Mutex;
 QueueHandle_t xKey_Queue;
+SemaphoreHandle_t xPlayer_Mutex;
+SemaphoreHandle_t xBall_Mutex;
+SemaphoreHandle_t xScore_Mutex;
 
 // interrupt handler for handling all unclaimed interrupts
 void irq_handler(void)
@@ -133,8 +136,11 @@ int main( void )
 	xScore_Update_Mutex =xSemaphoreCreateMutex();
 	xKey_Queue = xQueueCreate(10, sizeof(key_press_size));
 	xKey_Queue_Mutex = xSemaphoreCreateMutex();
+	xPlayer_Mutex = xSemaphoreCreateMutex();
+	xBall_Mutex = xSemaphoreCreateMutex();
+	xScore_Mutex = xSemaphoreCreateMutex();
 	
-	if(xDraw_screen == NULL || xScore_Update == NULL || xScore_Update_Mutex == NULL || xKey_Queue == NULL || xKey_Queue_Mutex == NULL){ //Kritischer Fehler. Programm kann ohne nicht laufen
+	if(xDraw_screen == NULL || xScore_Update == NULL || xScore_Update_Mutex == NULL || xKey_Queue == NULL || xKey_Queue_Mutex == NULL || xPlayer_Mutex == NULL || xBall_Mutex == NULL || xScore_Mutex == NULL){ //Kritischer Fehler. Programm kann ohne nicht laufen
 		//led blinken lassen
 		volatile uint32_t i = 0;
 		while(1){
@@ -172,43 +178,54 @@ void ball_logic(void *pvParameters){
 
 	for(;;){
 		//Erst Prüfungen, dann setzten
-		if(fPositionX < 1){
-			//Linker Rand. Spieler 2 bekommt Punkt
-			if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-				xQueueSend(xScore_Update, &player2, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
-				xSemaphoreGive(xScore_Update_Mutex);
+		if(xSemaphoreTake(xBall_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			if(fPositionX < 1){
+				//Linker Rand. Spieler 2 bekommt Punkt
+				if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+					xQueueSend(xScore_Update, &player2, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
+					xSemaphoreGive(xScore_Update_Mutex);
+				}
+				else{
+					//Fehler beim Score.
+				}
 			}
-			else{
-				//Fehler beim Score.
+			else if(fPositionX > DISP_W-1){
+				//Rechter Rand. Spieler 1 bekommt Punkt 
+				if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){ //Code hier ist extra dupliziert um Kritische Sektion möglichst klein zu halten.
+					xQueueSend(xScore_Update, &player1, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
+					xSemaphoreGive(xScore_Update_Mutex);
+				}
+				else{
+					//Fehler beim Score.
+				}
 			}
+			if(fPositionY > DISP_H-1 || fPositionY < 1){ //Trifft auf Rand oben oder unten 
+				//Nur Y Velocity Umkehren 
+				fVelocityY = fVelocityY*(-1);
+			}
+
+			if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+				if((fPositionX > fPositionPlayer2X+fWidthPlayer2X && fPositionX < fPositionPlayer2X+fWidthPlayer2X) && (fPositionY > fPositionPlayer2Y-fWidthPlayer2Y && fPositionY < fPositionPlayer2Y+fWidthPlayer2Y)){ //Trifft auf Spieler2
+					if(fVelocityX>0){ //Nur wenn der Ball nach Rechts fliegt soll seine Postion umgekehrt werden.
+						fVelocityX = fVelocityX*(-1);
+					}
+				}
+				else if((fPositionX > fPositionPlayer1X+fWidthPlayer1X && fPositionX < fPositionPlayer1X+fWidthPlayer1X) && (fPositionY > fPositionPlayer1Y-fWidthPlayer1Y && fPositionY < fPositionPlayer1Y+fWidthPlayer1Y)){ //Trifft auf Spieler1
+					if(fVelocityX<0){ //Nur wenn der Ball nach Links fliegt soll seine Position umgekehrt werden. 
+						fVelocityX = fVelocityX*(-1);
+					}
+				}
+				xSemaphoreGive(xPlayer_Mutex);
+			}
+			//Ball position updaten
+			fPositionX = fPositionX+fVelocityX;
+			fPositionY = fPositionY+fVelocityY;
+
+			xSemaphoreGive(xBall_Mutex);
 		}
-		else if(fPositionX > DISP_W-1){
-			//Rechter Rand. Spieler 1 bekommt Punkt 
-			if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){ //Code hier ist extra dupliziert um Kritische Sektion möglichst klein zu halten.
-				xQueueSend(xScore_Update, &player1, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
-				xSemaphoreGive(xScore_Update_Mutex);
-			}
-			else{
-				//Fehler beim Score.
-			}
-		}
-		if(fPositionY > DISP_H-1 || fPositionY < 1){ //Trifft auf Rand oben oder unten 
-			//Nur Y Velocity Umkehren 
-			fVelocityY = fVelocityY*(-1);
-		}
-		if((fPositionX > fPositionPlayer2X+fWidthPlayer2X && fPositionX < fPositionPlayer2X+fWidthPlayer2X) && (fPositionY > fPositionPlayer2Y-fWidthPlayer2Y && fPositionY < fPositionPlayer2Y+fWidthPlayer2Y)){ //Trifft auf Spieler2
-			if(fVelocityX>0){ //Nur wenn der Ball nach Rechts fliegt soll seine Postion umgekehrt werden.
-				fVelocityX = fVelocityX*(-1);
-			}
-		}
-		else if((fPositionX > fPositionPlayer1X+fWidthPlayer1X && fPositionX < fPositionPlayer1X+fWidthPlayer1X) && (fPositionY > fPositionPlayer1Y-fWidthPlayer1Y && fPositionY < fPositionPlayer1Y+fWidthPlayer1Y)){ //Trifft auf Spieler1
-			if(fVelocityX<0){ //Nur wenn der Ball nach Links fliegt soll seine Position umgekehrt werden. 
-				fVelocityX = fVelocityX*(-1);
-			}
-		}
-		//Ball position updaten
-		fPositionX = fPositionX+fVelocityX;
-		fPositionY = fPositionY+fVelocityY;
+		
+		
+
 
 		//Tell draw_screen Task to do its Job
 		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
@@ -256,31 +273,35 @@ void player_logic(void *pvParameters){
 				//Queue ist leer. Nicht schlimm. Einfach weitermachen.
 			}
 		}
+		
+		if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			//Spieler1 bewegen: 
+			if(green_pressed){ //hoch
+				if(fPositionPlayer1Y+fWidthPlayer1Y < DISP_H){ //Out of Bounds check
+					fPositionPlayer1Y = fPositionPlayer1Y+PLAYER_STEP;
+				}
+			}
+			if(blue_pressed){ //runter
+				if(fPositionPlayer1Y-fWidthPlayer1Y > 0){
+					fPositionPlayer1Y = fPositionPlayer1Y-PLAYER_STEP;
+				}
+			}
 
-		//Spieler1 bewegen: 
-		if(green_pressed){ //hoch
-			if(fPositionPlayer1Y+fWidthPlayer1Y < DISP_H){ //Out of Bounds check
-				fPositionPlayer1Y = fPositionPlayer1Y+PLAYER_STEP;
+			//Spieler2 bewegen: 
+			if(red_pressed){ //hoch
+				if(fPositionPlayer2Y+fWidthPlayer2Y < DISP_H){
+					fPositionPlayer2Y = fPositionPlayer2Y+PLAYER_STEP;
+				}
 			}
-		}
-		if(blue_pressed){ //runter
-			if(fPositionPlayer1Y-fWidthPlayer1Y > 0){
-				fPositionPlayer1Y = fPositionPlayer1Y-PLAYER_STEP;
+			if(yellow_pressed){ //runter
+				if(fPositionPlayer2Y-fWidthPlayer2Y > 0){
+					fPositionPlayer2Y = fPositionPlayer2Y+PLAYER_STEP;
+				}
 			}
-		}
-
-		//Spieler2 bewegen: 
-		if(red_pressed){ //hoch
-			if(fPositionPlayer2Y+fWidthPlayer2Y < DISP_H){
-				fPositionPlayer2Y = fPositionPlayer2Y+PLAYER_STEP;
-			}
-		}
-		if(yellow_pressed){ //runter
-			if(fPositionPlayer2Y-fWidthPlayer2Y > 0){
-				fPositionPlayer2Y = fPositionPlayer2Y+PLAYER_STEP;
-			}
+			xSemaphoreGive(xPlayer_Mutex);
 		}
 
+		
 
 		//Tell draw_screen Task to do its Job
 		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
@@ -302,11 +323,14 @@ void score(void *pvParameters){
 		if(xSemaphoreTake(xScore_Update_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
 			if(xQueueReceive(xScore_Update,&player_to_increase, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
 				xSemaphoreGive(xScore_Update_Mutex);
-				if(player_to_increase==player1){
-					iScorePlayer1++;
-				}
-				else if(player_to_increase==player2){
-					iScorePlayer2++;
+				if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+					if(player_to_increase==player1){
+						iScorePlayer1++;
+					}
+					else if(player_to_increase==player2){
+						iScorePlayer2++;
+					}
+					xSemaphoreGive(xScore_Mutex);
 				}
 			}
 			else{
@@ -314,23 +338,34 @@ void score(void *pvParameters){
 			}
 		}
 		//RESTART
-		if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
-			//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können? ja
-			//BALL
-			fVelocityX = 1; //Später random wählen
-			fVelocityY = 1;
-			fPositionX = 7;
-			fPositionY = DISP_H/2;
+		if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(50))==pdTRUE){
+			if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
+				xSemaphoreGive(xScore_Mutex);
+				//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können? ja
+				if(xSemaphoreTake(xBall_Mutex,pdMS_TO_TICKS(50))==pdTRUE){
+					//BALL
+					fVelocityX = 1; //Später random wählen
+					fVelocityY = 1;
+					fPositionX = 7;
+					fPositionY = DISP_H/2;
+					xSemaphoreGive(xBall_Mutex);
+				}
+				if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(50))==pdTRUE){
+					//PLAYERS
 
-			//PLAYERS
+					//Links ist Spieler 1
+					fPositionPlayer1Y = DISP_H/2;
+					//Rechts ist Spieler 2
+					fPositionPlayer2Y = DISP_H/2;
+					xSemaphoreGive(xPlayer_Mutex);
+				}
 
-			//Links ist Spieler 1
-			fPositionPlayer1Y = DISP_H/2;
-			iScorePlayer1 = 0;
-
-			//Rechts ist Spieler 2
-			fPositionPlayer2Y = DISP_H/2;
-			iScorePlayer2 = 0;
+				if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(50))==pdTRUE){
+					iScorePlayer1 = 0;				
+					iScorePlayer2 = 0;
+					xSemaphoreGive(xScore_Mutex);
+				}
+			}
 		}
 		//Tell draw_screen Task to do its Job
 		if(xSemaphoreTake(xDraw_screen, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){//Warten bis Ressource freigegeben wird
