@@ -8,6 +8,8 @@
 #include "font.h"
 #include "platform.h"
 
+#include <string.h>
+
 #define REG(P) (*(volatile uint32_t *) (P))
 
 #define GPIO_BASE 0x10012000
@@ -30,9 +32,9 @@ const int buttons[4] = {GREEN_BUTTON, BLUE_BUTTON, RED_BUTTON, YELLOW_BUTTON};
 #define LONG_WAIT_SEMAPHORE 50 //ms
 #define UPDATE_RATE_BALL 20 //ms
 #define UPDATE_RATE_PLAYER 5 //ms
-#define GAME_REFRESHRATE 30 //hz
+#define GAME_REFRESHRATE 100 //hz
 #define PLAYER_STEP 1
-#define DEBOUNCE_THRESHOLD 10 
+#define DEBOUNCE_THRESHOLD 3
 
 //Structs
 struct key_pres
@@ -47,6 +49,9 @@ void player_logic(void *pvParameters);
 void score(void *pvParameters);
 void keyboard(void *pvParameters);
 void display(void *pvParameters);
+
+//functions
+void resetPlayerBall();
 
 //Variables
 
@@ -127,14 +132,13 @@ int main( void )
 	//Bildschirm Setup
 	oled_init();
 	fb_init();
-	setCursor(DISP_H, (DISP_W/2)-17);
 
 
 	xTaskCreate(ball_logic, "Ball logik", 128, NULL,tskIDLE_PRIORITY+2UL, NULL);
 	xTaskCreate(player_logic, "Spieler logik", 128, NULL,tskIDLE_PRIORITY+2UL, NULL);
 	xTaskCreate(score, "Punkte und Spiel reset", 128, NULL, tskIDLE_PRIORITY+2UL, NULL);
 	xTaskCreate(keyboard, "Eingabe", 128, NULL, tskIDLE_PRIORITY+2UL, NULL);
-	xTaskCreate(display, "Bildschirm", 128, NULL, tskIDLE_PRIORITY+1UL, NULL); 	
+	xTaskCreate(display, "Bildschirm", 128, NULL, tskIDLE_PRIORITY+2UL, NULL); 	
 
 
 	//Setup Semaphores etc.
@@ -212,12 +216,18 @@ void ball_logic(void *pvParameters){
 			}
 
 			if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-				if((fPositionX > fPositionPlayer2X+fWidthPlayer2X && fPositionX < fPositionPlayer2X+fWidthPlayer2X) && (fPositionY > fPositionPlayer2Y-fWidthPlayer2Y && fPositionY < fPositionPlayer2Y+fWidthPlayer2Y)){ //Trifft auf Spieler2
+				if((fPositionX >= fPositionPlayer2X-fWidthPlayer2X &&
+					fPositionX <= fPositionPlayer2X+fWidthPlayer2X) &&
+					(fPositionY >= fPositionPlayer2Y-fWidthPlayer2Y &&
+					fPositionY <= fPositionPlayer2Y+fWidthPlayer2Y)){ //Trifft auf Spieler2
 					if(fVelocityX>0){ //Nur wenn der Ball nach Rechts fliegt soll seine Postion umgekehrt werden.
 						fVelocityX = fVelocityX*(-1);
 					}
 				}
-				else if((fPositionX > fPositionPlayer1X+fWidthPlayer1X && fPositionX < fPositionPlayer1X+fWidthPlayer1X) && (fPositionY > fPositionPlayer1Y-fWidthPlayer1Y && fPositionY < fPositionPlayer1Y+fWidthPlayer1Y)){ //Trifft auf Spieler1
+				else if((fPositionX >= fPositionPlayer1X-fWidthPlayer1X &&
+					fPositionX <= fPositionPlayer1X+fWidthPlayer1X) &&
+					(fPositionY >= fPositionPlayer1Y-fWidthPlayer1Y &&
+					fPositionY <= fPositionPlayer1Y+fWidthPlayer1Y)){ //Trifft auf Spieler1
 					if(fVelocityX<0){ //Nur wenn der Ball nach Links fliegt soll seine Position umgekehrt werden. 
 						fVelocityX = fVelocityX*(-1);
 					}
@@ -245,31 +255,24 @@ void player_logic(void *pvParameters){
 	int red_pressed;
 	
 	for(;;){
-		if(xSemaphoreTake(xKey_Queue_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE)==pdTRUE)){
-			if(xQueueReceive(xKey_Queue, &key_press_player, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdPASS){
-				xSemaphoreGive(xKey_Queue_Mutex);
-				//Button handeln
-				switch (key_press_player.button_num)
-				{
-				case GREEN_BUTTON:
-					green_pressed = key_press_player.button_pressed;
-					break;
-				case BLUE_BUTTON: 
-					blue_pressed = key_press_player.button_pressed;
-					break;
-				case YELLOW_BUTTON:
-					yellow_pressed = key_press_player.button_pressed;
-					break;
-				case RED_BUTTON:
-					red_pressed = key_press_player.button_pressed;
-					break;
-				default:
-					break;
-				}
-			}
-			else{
-				xSemaphoreGive(xKey_Queue_Mutex);
-				//Queue ist leer. Nicht schlimm. Einfach weitermachen.
+		while(xQueueReceive(xKey_Queue, &key_press_player, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
+			//Button handeln
+			switch (key_press_player.button_num)
+			{
+			case GREEN_BUTTON:
+				green_pressed = key_press_player.button_pressed;
+				break;
+			case BLUE_BUTTON: 
+				blue_pressed = key_press_player.button_pressed;
+				break;
+			case YELLOW_BUTTON:
+				yellow_pressed = key_press_player.button_pressed;
+				break;
+			case RED_BUTTON:
+				red_pressed = key_press_player.button_pressed;
+				break;
+			default:
+				break;
 			}
 		}
 		
@@ -294,7 +297,7 @@ void player_logic(void *pvParameters){
 			}
 			if(yellow_pressed){ //runter
 				if(fPositionPlayer2Y-fWidthPlayer2Y > 0){
-					fPositionPlayer2Y = fPositionPlayer2Y+PLAYER_STEP;
+					fPositionPlayer2Y = fPositionPlayer2Y-PLAYER_STEP;
 				}
 			}
 			xSemaphoreGive(xPlayer_Mutex);
@@ -322,6 +325,7 @@ void score(void *pvParameters){
 					else if(player_to_increase==player2){
 						iScorePlayer2++;
 					}
+					resetPlayerBall();
 					xSemaphoreGive(xScore_Mutex);
 				}
 			}
@@ -331,32 +335,19 @@ void score(void *pvParameters){
 		}
 		//RESTART
 		if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
-			if(iScorePlayer1 == 3 || iScorePlayer2 == 3){
+			if(iScorePlayer1 >= 3 || iScorePlayer2 >= 3){
 				xSemaphoreGive(xScore_Mutex);
 				//Muss ich hier verhindern, dass die anderen Tasks drauf zugreifen können? ja
-				if(xSemaphoreTake(xBall_Mutex,pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
-					//BALL
-					fVelocityX = 1; //Später random wählen
-					fVelocityY = 1;
-					fPositionX = 7;
-					fPositionY = DISP_H/2;
-					xSemaphoreGive(xBall_Mutex);
-				}
-				if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
-					//PLAYERS
-
-					//Links ist Spieler 1
-					fPositionPlayer1Y = DISP_H/2;
-					//Rechts ist Spieler 2
-					fPositionPlayer2Y = DISP_H/2;
-					xSemaphoreGive(xPlayer_Mutex);
-				}
+				resetPlayerBall();
 
 				if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
 					iScorePlayer1 = 0;				
 					iScorePlayer2 = 0;
 					xSemaphoreGive(xScore_Mutex);
 				}
+			}
+			else{
+				xSemaphoreGive(xScore_Mutex);
 			}
 		}
 		//Tell draw_screen Task to do its Job
@@ -378,16 +369,12 @@ void keyboard(void *pvParameters){
 		for(int i=0; i<4; i++){
 			current = REG(GPIO_BASE + GPIO_INPUT_VAL) & (1 << buttons[i]);//button lesen
 			//Hochzählen für das debouncen
-			if(current && button_last_states[i]){
-				button_count[i]++;
-			}
-			else if (!current && !button_last_states[i]){
+			if(current == button_last_states[i]){
 				button_count[i]++;
 			}
 			else{
 				button_count[i] = 0;
 			}
-
 			if(button_count[i]>DEBOUNCE_THRESHOLD && button_last_pressed[i]!=current){ //Debounce check und check ob der Button state sich zum letzten Event geändert hat
 
 				button_last_pressed[i]=current;
@@ -396,11 +383,8 @@ void keyboard(void *pvParameters){
 				key_press_keyboard.button_num = buttons[i];
 				key_press_keyboard.button_pressed = current;
 
-				//Mutex anfragen und Queue bestücken
-				if(xSemaphoreTake(xKey_Queue_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-					xQueueSend(xKey_Queue, &key_press_keyboard, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
-					xSemaphoreGive(xKey_Queue_Mutex);
-				}
+				// Queue bestücken
+				xQueueSend(xKey_Queue, &key_press_keyboard, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE));
 			}
 			button_last_states[i] = current;
 		}
@@ -415,6 +399,8 @@ void keyboard(void *pvParameters){
 void display(void *pvParameters){
 
 	for(;;){
+		//clearen 
+		fb_clear();
 		//malen
 		if(xSemaphoreTake(xDraw_screen, portMAX_DELAY)==pdTRUE){//Warten bis Ressource freigegeben wird
 			if(xSemaphoreTake(xBall_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
@@ -425,12 +411,12 @@ void display(void *pvParameters){
 			if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
 				//START ecke oben Links vom Spieler. X
 				for(int x=fPositionPlayer1X-fWidthPlayer1X; x<=fPositionPlayer1X+fWidthPlayer1X; x++){
-					for(int y=fPositionPlayer1Y+fWidthPlayer1Y; y<=fPositionPlayer1Y-fWidthPlayer1Y; y++){
+					for(int y=fPositionPlayer1Y+fWidthPlayer1Y; y>=fPositionPlayer1Y-fWidthPlayer1Y; y--){
 						fb_set_pixel(x, y, 1);
 					}
 				}
 				for(int x=fPositionPlayer2X-fWidthPlayer2X; x<=fPositionPlayer2X+fWidthPlayer2X; x++){
-					for(int y=fPositionPlayer2Y+fWidthPlayer2Y; y<=fPositionPlayer2Y-fWidthPlayer2Y; y++){
+					for(int y=fPositionPlayer2Y+fWidthPlayer2Y; y>=fPositionPlayer2Y-fWidthPlayer2Y; y--){
 						fb_set_pixel(x, y, 1);
 					}
 				}
@@ -438,9 +424,12 @@ void display(void *pvParameters){
 			}
 
 			if(xSemaphoreTake(xScore_Mutex, pdMS_TO_TICKS(STANDARD_WAIT_SEMAPHORE))==pdTRUE){
-				printChar((char)iScorePlayer1);
+				setCursor(0, (DISP_W/2)-CHAR_W);
+				printChar(iScorePlayer1+'0');
+				setCursor(0, DISP_W/2);
 				printChar(':');
-				printChar((char)iScorePlayer2);
+				setCursor(0, (DISP_W/2)+CHAR_W);
+				printChar(iScorePlayer2+'0');
 				xSemaphoreGive(xScore_Mutex);
 			}
 			
@@ -448,6 +437,25 @@ void display(void *pvParameters){
 		} 
 
 		
-		vTaskDelay(pdMS_TO_TICKS(1/GAME_REFRESHRATE));
+		vTaskDelay(pdMS_TO_TICKS(1000/GAME_REFRESHRATE));
+	}
+}
+void resetPlayerBall(){
+	if(xSemaphoreTake(xBall_Mutex,pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
+		//BALL
+		fVelocityX = 1; //Später random wählen
+		fVelocityY = 1;
+		fPositionX = 7;
+		fPositionY = DISP_H/2;
+		xSemaphoreGive(xBall_Mutex);
+	}
+	if(xSemaphoreTake(xPlayer_Mutex, pdMS_TO_TICKS(LONG_WAIT_SEMAPHORE))==pdTRUE){
+		//PLAYERS
+
+		//Links ist Spieler 1
+		fPositionPlayer1Y = DISP_H/2;
+		//Rechts ist Spieler 2
+		fPositionPlayer2Y = DISP_H/2;
+		xSemaphoreGive(xPlayer_Mutex);
 	}
 }
